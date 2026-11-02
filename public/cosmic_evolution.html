@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Cosmic Evolution 3D</title>
+  <meta name="description" content="A realistic 3D cosmic sandbox evolution game where you steer your celestial body across deep space, collect rocky asteroid debris, and evolve through branching cosmic paths.">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-tap-highlight-color: transparent; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background-color: #020611; font-family: system-ui, -apple-system, sans-serif; color: #f1f5f9; touch-action: none; }
+    #canvas-container { position: absolute; inset: 0; z-index: 0; cursor: pointer; touch-action: none; }
+
+    /* Touch Steering Indicator Ring */
+    #touch-indicator {
+      position: fixed;
+      width: 58px;
+      height: 58px;
+      margin-left: -29px;
+      margin-top: -29px;
+      border: 2px solid #38bdf8;
+      background: rgba(56, 189, 248, 0.18);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 35;
+      display: none;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.6);
+      animation: pulseRing 1.3s infinite ease-out;
+    }
+    #touch-indicator::after {
+      content: '';
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.85);
+    }
+    @keyframes pulseRing {
+      0% { transform: scale(0.9); opacity: 0.85; }
+      50% { transform: scale(1.15); opacity: 0.45; }
+      100% { transform: scale(0.9); opacity: 0.85; }
+    }
+
+    /* In-Game HUD matching screenshot */
+    .hud-layer { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; }
+    .interactive { pointer-events: auto; }
+
+    /* Top Left Screenshot Cluster */
+    .top-left-cluster {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .planet-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 10px 16px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+      min-width: 220px;
+    }
+    .planet-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 11px;
+      color: #fff;
+      box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
+    }
+    .planet-info {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+    .planet-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: 0.2px;
+    }
+    .mass-counter {
+      font-size: 12px;
+      font-family: monospace;
+      color: #fbbf24;
+      margin-top: 2px;
+    }
+    .mass-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+    .mass-bar-fill {
+      height: 100%;
+      background: #fbbf24;
+      width: 10%;
+      border-radius: 999px;
+      box-shadow: 0 0 8px rgba(251, 191, 36, 0.8);
+      transition: width 0.3s;
+    }
+
+    /* Circular action buttons */
+    .action-row {
+      display: flex;
+      gap: 12px;
+      margin-left: 4px;
+    }
+    .circle-btn-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+    }
+    .circle-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 6px 14px rgba(0,0,0,0.5);
+      transition: 0.2s;
+    }
+    .circle-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.5);
+      transform: scale(1.05);
+    }
+    .circle-btn:active {
+      transform: scale(0.95);
+    }
+    .circle-btn.highlight {
+      border-color: #fbbf24;
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.2);
+      box-shadow: 0 0 14px rgba(251, 191, 36, 0.6);
+      animation: pulseBtn 1.5s infinite;
+    }
+    @keyframes pulseBtn {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    .btn-key {
+      font-size: 9px;
+      font-family: monospace;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 4px;
+      text-transform: uppercase;
+    }
+    .btn-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: rgba(255, 255, 255, 0.85);
+      margin-top: -2px;
+    }
+
+    /* Top Right Resources Cluster */
+    .top-right-cluster {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 16px;
+      padding: 8px 14px;
+      font-family: monospace;
+      font-size: 11px;
+    }
+    .res-pill { display: flex; align-items: center; gap: 4px; }
+    .res-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+    /* Modals */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 50; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .modal-content { background: #070d19; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 20px; max-width: 720px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 24px; pointer-events: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+
+    .btn { background: #1e293b; color: #f8fafc; border: 1px solid #334155; padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.15s; }
+    .btn:hover { background: #334155; }
+    .btn-primary { background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #000; border: none; font-weight: 800; }
+    .btn-primary:hover { opacity: 0.95; transform: scale(1.02); }
+
+    /* Title screen */
+    #title-screen {
+      position: absolute;
+      inset: 0;
+      z-index: 40;
+      background: radial-gradient(circle at center, rgba(14, 28, 54, 0.5) 0%, rgba(2, 6, 17, 0.94) 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: 36px 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+  <div id="touch-indicator"></div>
+
+  <!-- Title Screen -->
+  <div id="title-screen">
+    <div style="margin-top: 40px;">
+      <h1 style="font-size: 44px; font-weight: 900; letter-spacing: 4px; background: linear-gradient(90deg, #fef08a, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+        PLANET EVOLUTION 3D
+      </h1>
+      <p style="margin-top: 12px; color: #94a3b8; font-size: 14px; max-width: 520px; line-height: 1.6;">
+        Touch and drag anywhere with your finger or mouse to steer your celestial body through space. Drift near realistic asteroids to accrete mass, harvest elements, and trigger branching cosmic metamorphosis.
+      </p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 320px;">
+      <button class="btn btn-primary" style="padding: 16px; font-size: 16px;" onclick="startGame()">START JOURNEY</button>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <button class="btn" onclick="openModal('tree-modal')">EVOLUTION TREE</button>
+        <button class="btn" onclick="openModal('codex-modal')">DISCOVERIES</button>
+      </div>
+    </div>
+
+    <div style="font-family: monospace; font-size: 12px; color: #64748b;">
+      Touch & Drag to Steer Planet · Q/Space Capture · E Evolution Paths · Esc Settings
+    </div>
+  </div>
+
+  <!-- In-Game Minimalist HUD (Screenshot-Matched) -->
+  <div class="hud-layer" id="game-hud" style="display: none;">
+    <!-- Top-Left & Top-Right Header -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+      <!-- Top-Left: Screenshot Cluster -->
+      <div class="top-left-cluster interactive">
+        <div class="planet-card">
+          <div class="planet-avatar" id="hud-avatar" style="background: radial-gradient(circle at 35% 35%, #fff 0%, #2a6f97 50%, #031428 100%);">
+            LV1
+          </div>
+          <div class="planet-info">
+            <div class="planet-name" id="hud-name">Rocky Planet</div>
+            <div class="mass-counter" id="hud-mass">30</div>
+            <div class="mass-bar-bg">
+              <div class="mass-bar-fill" id="hud-bar"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Circle Buttons: Settings [Esc], Capture [Q], Paths [E] -->
+        <div class="action-row">
+          <div class="circle-btn-wrap" onclick="openModal('settings-modal')">
+            <div class="circle-btn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+            </div>
+            <span class="btn-key">Esc</span>
+            <span class="btn-label">Settings</span>
+          </div>
+
+          <div class="circle-btn-wrap" onclick="triggerAbility()">
+            <div class="circle-btn" id="btn-capture">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="9"></circle>
+                <circle cx="12" cy="12" r="3"></circle>
+                <line x1="12" y1="3" x2="12" y2="7"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+                <line x1="3" y1="12" x2="7" y2="12"></line>
+                <line x1="17" y1="12" x2="21" y2="12"></line>
+              </svg>
+            </div>
+            <span class="btn-key">Q</span>
+            <span class="btn-label">Capture</span>
+          </div>
+
+          <div class="circle-btn-wrap" onclick="openModal('evolve-modal')">
+            <div class="circle-btn" id="btn-evolve">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+              </svg>
+            </div>
+            <span class="btn-key">E</span>
+            <span class="btn-label">Paths</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top-Right: Resources -->
+      <div class="top-right-cluster interactive">
+        <div class="res-pill"><span class="res-dot" style="background: #a89f91;"></span><span id="res-rock">0</span></div>
+        <div class="res-pill"><span class="res-dot" style="background: #93c5fd;"></span><span id="res-metal">0</span></div>
+        <div class="res-pill"><span class="res-dot" style="background: #67e8f9;"></span><span id="res-ice">0</span></div>
+        <div class="res-pill"><span class="res-dot" style="background: #f472b6;"></span><span id="res-gas">0</span></div>
+        <div class="res-pill"><span class="res-dot" style="background: #f59e0b;"></span><span id="res-plasma">0</span></div>
+        <button class="btn" style="padding: 4px 8px; font-size: 11px;" onclick="toggleAudio()">🔊</button>
+      </div>
+    </div>
+
+    <!-- Bottom Notification Toast -->
+    <div id="event-toast" style="align-self: center; display: none; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56, 189, 248, 0.5); border-radius: 999px; padding: 6px 18px; font-size: 12px; color: #38bdf8;">
+      Gravitational accretion active
+    </div>
+  </div>
+
+  <!-- Evolution Modal -->
+  <div class="modal-overlay" id="evolve-modal">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="font-size: 20px; font-weight: 800; color: #fff;">COSMIC METAMORPHOSIS</h2>
+        <button class="btn" onclick="closeModal('evolve-modal')">✕</button>
+      </div>
+      <p style="font-size: 13px; color: #94a3b8; margin-bottom: 16px;">
+        Choose your evolution trajectory. Different forms unlock unique gravitational pull, atmospheric layers, and cosmic powers.
+      </p>
+      <div id="evolve-choices" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px;"></div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settings-modal">
+    <div class="modal-content" style="max-width: 480px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="font-size: 20px; font-weight: 800;">FLIGHT CONTROLS & SETTINGS</h2>
+        <button class="btn" onclick="closeModal('settings-modal')">✕</button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 14px; font-size: 13px; color: #cbd5e1;">
+        <div>
+          <b>Touch & Mouse Steering:</b><br>
+          Touch and drag anywhere on screen to smoothly steer your celestial body. Move directly toward rocky asteroid fields to draw them in with gravity.
+        </div>
+        <div>
+          <b>Q or Space:</b> Activate Stardust Pull to draw all surrounding rocks inward.
+        </div>
+        <div>
+          <b>E:</b> Open Evolution Paths menu.
+        </div>
+        <div style="border-top: 1px solid #334155; padding-top: 12px; margin-top: 4px;">
+          <button class="btn" style="background: rgba(220,38,38,0.25); border: 1px solid rgba(239,68,68,0.6); color: #fca5a5; width: 100%; padding: 10px; font-weight: 700;" onclick="resetCosmicJourney()">
+            🔄 RESET COSMIC JOURNEY
+          </button>
+        </div>
+        <button class="btn btn-primary" onclick="closeModal('settings-modal')">RESUME COSMOS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tree Modal -->
+  <div class="modal-overlay" id="tree-modal">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="font-size: 20px; font-weight: 800;">FULL EVOLUTION TREE</h2>
+        <button class="btn" onclick="closeModal('tree-modal')">✕</button>
+      </div>
+      <div id="tree-content" style="font-size: 13px; line-height: 1.7; color: #94a3b8;"></div>
+    </div>
+  </div>
+
+  <!-- Codex Modal -->
+  <div class="modal-overlay" id="codex-modal">
+    <div class="modal-content">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 style="font-size: 20px; font-weight: 800;">COSMIC CODEX</h2>
+        <button class="btn" onclick="closeModal('codex-modal')">✕</button>
+      </div>
+      <div id="codex-content" style="display: grid; grid-template-columns: 1fr; gap: 10px;"></div>
+    </div>
+  </div>
+
+  <script>
+    // Expanded Evolution Forms Database with 25+ Paths
+    const EVOLUTION_FORMS = {
+      // Stage 1
+      meteorite: { id: 'meteorite', name: 'Primordial Meteorite', stage: 1, massReq: 0, color: '#8b8478', tier: 'Common', desc: 'A drifting chondritic meteorite fragment in deep space.', choices: ['asteroid_rocky', 'asteroid_metallic', 'asteroid_icy', 'asteroid_carbonaceous'] },
+      
+      // Stage 2: Asteroids
+      asteroid_rocky: { id: 'asteroid_rocky', name: 'Silicate Asteroid', stage: 2, massReq: 120, color: '#8a7968', tier: 'Common', desc: 'Rugged rocky asteroid packed with silicates and impact craters.', choices: ['mini_planet_rocky', 'mini_planet_volcanic', 'mini_planet_desert'] },
+      asteroid_metallic: { id: 'asteroid_metallic', name: 'Nickel-Iron Asteroid', stage: 2, massReq: 140, color: '#93c5fd', tier: 'Advanced', desc: 'Dense protoplanetary core remnant with intense magnetism.', choices: ['mini_planet_rocky', 'mini_planet_crystal'] },
+      asteroid_icy: { id: 'asteroid_icy', name: 'Volatile Comet Asteroid', stage: 2, massReq: 110, color: '#67e8f9', tier: 'Advanced', desc: 'Fast icy body sublimating volatile methane and water frost.', choices: ['mini_planet_ocean', 'planet_ice_giant'] },
+      asteroid_carbonaceous: { id: 'asteroid_carbonaceous', name: 'Carbonaceous Chondrite', stage: 2, massReq: 130, color: '#52525b', tier: 'Advanced', desc: 'Primordial organic-rich asteroid carrying prebiotic minerals.', choices: ['mini_planet_ocean', 'mini_planet_desert'] },
+      asteroid_crystalline: { id: 'asteroid_crystalline', name: 'Prismatic Gem Asteroid', stage: 2, massReq: 150, color: '#c084fc', tier: 'Rare', desc: 'Exotic asteroid with diamond and quartz crystal facets.', choices: ['mini_planet_crystal', 'planet_carbon'] },
+
+      // Stage 3: Mini Planets
+      mini_planet_rocky: { id: 'mini_planet_rocky', name: 'Lithic Mini Planet', stage: 3, massReq: 450, color: '#b08d6d', tier: 'Advanced', desc: 'Dwarf planetary body with solid regolith mantle.', choices: ['planet_terrestrial', 'planet_super_earth'] },
+      mini_planet_ocean: { id: 'mini_planet_ocean', name: 'Hydrous Mini Planet', stage: 3, massReq: 420, color: '#1e7db0', tier: 'Advanced', desc: 'Primordial water world with global ocean basins.', choices: ['planet_terrestrial', 'planet_oceanus'] },
+      mini_planet_volcanic: { id: 'mini_planet_volcanic', name: 'Igneous Mini Planet', stage: 3, massReq: 480, color: '#e64a19', tier: 'Advanced', desc: 'Molten dwarf world with glowing lava rifts and magma chambers.', choices: ['planet_lava', 'star_red_dwarf'] },
+      mini_planet_desert: { id: 'mini_planet_desert', name: 'Arid Dune World', stage: 3, massReq: 440, color: '#d97706', tier: 'Advanced', desc: 'Sun-baked arid world with vast silicate dunes and canyon networks.', choices: ['planet_terrestrial', 'planet_super_earth'] },
+      mini_planet_crystal: { id: 'mini_planet_crystal', name: 'Crystalline Dwarf', stage: 3, massReq: 520, color: '#a855f7', tier: 'Rare', desc: 'High-pressure world with diamond tectonic plates.', choices: ['planet_carbon', 'star_white_dwarf'] },
+
+      // Stage 4: Full Planets
+      planet_terrestrial: { id: 'planet_terrestrial', name: 'Habitable Rocky Planet', stage: 4, massReq: 1200, color: '#2a6f97', tier: 'Stellar', desc: 'Vibrant planet with sapphire oceans, green continents, white clouds, and moons.', choices: ['planet_super_earth', 'planet_gas_giant', 'star_sun_like', 'dyson_sphere'] },
+      planet_super_earth: { id: 'planet_super_earth', name: 'Massive Super-Earth', stage: 4, massReq: 1600, color: '#574130', tier: 'Stellar', desc: 'Colossal rocky world with strong surface gravity and dense atmospheres.', choices: ['star_red_dwarf', 'star_sun_like'] },
+      planet_lava: { id: 'planet_lava', name: 'Molten Magma Superworld', stage: 4, massReq: 1400, color: '#dc2626', tier: 'Stellar', desc: 'Superheated ocean of churning orange liquid basalt and erupting calderas.', choices: ['star_red_dwarf', 'star_sun_like'] },
+      planet_oceanus: { id: 'planet_oceanus', name: 'Leviathan Oceanic Megaworld', stage: 4, massReq: 1500, color: '#0284c7', tier: 'Stellar', desc: 'Boundless ocean hundreds of kilometers deep with high-pressure ice mantles.', choices: ['planet_ice_giant', 'planet_gas_giant'] },
+      planet_carbon: { id: 'planet_carbon', name: 'Diamond Mantle Carbon World', stage: 4, massReq: 1700, color: '#71717a', tier: 'Stellar', desc: 'Dense world with graphite crust and thousands of kilometers of diamond mantle.', choices: ['star_white_dwarf', 'star_red_dwarf'] },
+      planet_gas_giant: { id: 'planet_gas_giant', name: 'Jovian Gas Giant', stage: 4, massReq: 2400, color: '#d4a373', tier: 'Stellar', desc: 'Immense gas sphere with swirling cloud storms and planetary rings.', choices: ['star_sun_like', 'star_blue_giant'] },
+      planet_ice_giant: { id: 'planet_ice_giant', name: 'Neptunian Ice Giant', stage: 4, massReq: 1800, color: '#4cc9f0', tier: 'Stellar', desc: 'Cyan world with supercritical methane mantles and howling auroras.', choices: ['star_red_dwarf', 'planet_gas_giant'] },
+
+      // Stage 5: Stars
+      star_red_dwarf: { id: 'star_red_dwarf', name: 'Red Dwarf Star', stage: 5, massReq: 5000, color: '#ff4d00', tier: 'Stellar', desc: 'Long-lived stellar furnace stably burning hydrogen for trillions of years.', choices: ['star_sun_like', 'star_white_dwarf', 'white_hole'] },
+      star_sun_like: { id: 'star_sun_like', name: 'Sun-like Main Sequence Star', stage: 5, massReq: 8500, color: '#fef08a', tier: 'Stellar', desc: 'Luminous yellow-white star anchoring planets with dynamic coronal loops.', choices: ['star_blue_giant', 'star_wolf_rayet', 'supernova_remnant'] },
+      star_blue_giant: { id: 'star_blue_giant', name: 'Blue Hypergiant', stage: 5, massReq: 16000, color: '#38bdf8', tier: 'Extreme', desc: 'Ultra-luminous young giant radiating intense stellar winds.', choices: ['supernova_remnant', 'black_hole'] },
+      star_white_dwarf: { id: 'star_white_dwarf', name: 'Degenerate White Dwarf', stage: 5, massReq: 10000, color: '#e0f2fe', tier: 'Stellar', desc: 'Earth-sized electron-degenerate stellar core glowing with residual thermal energy.', choices: ['neutron_star', 'black_hole'] },
+      star_wolf_rayet: { id: 'star_wolf_rayet', name: 'Wolf-Rayet Stellar Behemoth', stage: 5, massReq: 22000, color: '#f43f5e', tier: 'Extreme', desc: 'Hyper-hot dying star furiously blasting its outer envelopes into space.', choices: ['supernova_remnant', 'black_hole'] },
+
+      // Stage 6: Cosmic Transformations
+      supernova_remnant: { id: 'supernova_remnant', name: 'Supernova Shockwave', stage: 6, massReq: 26000, color: '#ff007f', tier: 'Extreme', desc: 'Relativistic blast wave creating heavy elements and newborn neutron cores.', choices: ['neutron_star', 'black_hole', 'white_hole'] },
+      neutron_star: { id: 'neutron_star', name: 'Pulsar Neutron Star', stage: 6, massReq: 32000, color: '#e0e7ff', tier: 'Extreme', desc: 'Hyper-dense pure nuclear core sweeping twin lighthouse beams of gamma rays.', choices: ['black_hole', 'white_hole'] },
+
+      // Stage 7: Singularities & Mysterious Paths
+      black_hole: { id: 'black_hole', name: 'Singularity Black Hole', stage: 7, massReq: 50000, color: '#000000', tier: 'Extreme', desc: 'Inescapable event horizon and fiery swirling accretion disk.', choices: ['quasar', 'white_hole', 'void_singularity'] },
+      white_hole: { id: 'white_hole', name: 'Time-Reversed White Hole', stage: 7, massReq: 65000, color: '#ffffff', tier: 'Mythic', desc: 'Hypothetical gravitational fountain continually expelling newborn matter.', choices: ['unstable_galaxy', 'void_singularity'] },
+      quasar: { id: 'quasar', name: 'Hyper-Luminous Quasar', stage: 7, massReq: 85000, color: '#facc15', tier: 'Mythic', desc: 'Supermassive black hole accreting billions of tons of matter, outshining galaxies.', choices: ['unstable_galaxy', 'void_singularity'] },
+      dyson_sphere: { id: 'dyson_sphere', name: 'Kardashev Dyson Megasphere', stage: 7, massReq: 80000, color: '#38bdf8', tier: 'Mythic', desc: 'Star completely encased in photovoltaic hexagonal swarm megastructure.', choices: ['unstable_galaxy', 'cosmic_anomaly'] },
+      unstable_galaxy: { id: 'unstable_galaxy', name: 'Protogalaxy Spiral Core', stage: 7, massReq: 130000, color: '#8b5cf6', tier: 'Mythic', desc: 'You are the supermassive gravitational heart of a young spiral galaxy.', choices: ['void_singularity', 'cosmic_anomaly'] },
+      void_singularity: { id: 'void_singularity', name: 'Primordial Spacetime Void', stage: 7, massReq: 160000, color: '#050508', tier: 'Exotic', desc: 'A rupture in the cosmic vacuum tearing apart matter and space.', choices: ['cosmic_anomaly'] },
+      cosmic_anomaly: { id: 'cosmic_anomaly', name: 'Higher-Dimensional Anomaly', stage: 7, massReq: 220000, color: '#10b981', tier: 'Exotic', desc: 'A trans-dimensional reality-warping presence beyond space-time.', choices: [] }
+    };
+
+    // State
+    let currentFormId = 'meteorite';
+    let mass = 30;
+    let inventory = { rock: 12, metal: 4, ice: 4, gas: 0, plasma: 0 };
+    let discovered = ['meteorite'];
+    let moons = [];
+    let audioMuted = false;
+
+    // Web Audio
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    function playBeep(freq, type = 'sine', duration = 0.15) {
+      if (audioMuted || !audioCtx) return;
+      try {
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + duration);
+      } catch (e) {}
+    }
+    function toggleAudio() { audioMuted = !audioMuted; }
+
+    // Three.js Scene Setup
+    const container = document.getElementById('canvas-container');
+    const touchIndicator = document.getElementById('touch-indicator');
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x020612, 0.00035);
+
+    const camera = new THREE.PerspectiveCamera(52, window.innerWidth / window.innerHeight, 0.5, 6000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    container.appendChild(renderer.domElement);
+
+    // Realistic Lighting matching screenshot (strong solar key + soft space fill)
+    scene.add(new THREE.AmbientLight(0x16243b, 1.2));
+    const dirLight = new THREE.DirectionalLight(0xfff8ea, 2.8);
+    dirLight.position.set(120, 150, 100);
+    scene.add(dirLight);
+
+    const rimLight = new THREE.DirectionalLight(0x38bdf8, 1.0);
+    rimLight.position.set(-100, -50, -80);
+    scene.add(rimLight);
+
+    // Deep Space Glowing Nebula Sky Dome (matching user screenshot)
+    function createRealisticNebulaSky() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      // Deep space base
+      const grad = ctx.createLinearGradient(0, 0, 0, 512);
+      grad.addColorStop(0, '#02050c');
+      grad.addColorStop(0.5, '#050d1a');
+      grad.addColorStop(1, '#02040a');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1024, 512);
+
+      // Huge luminous cyan-blue nebula cloud (matching screenshot)
+      const neb1 = ctx.createRadialGradient(480, 220, 20, 480, 220, 360);
+      neb1.addColorStop(0, 'rgba(186, 230, 253, 0.55)');
+      neb1.addColorStop(0.25, 'rgba(56, 189, 248, 0.38)');
+      neb1.addColorStop(0.6, 'rgba(14, 116, 144, 0.22)');
+      neb1.addColorStop(1, 'rgba(2, 6, 23, 0)');
+      ctx.fillStyle = neb1;
+      ctx.fillRect(0, 0, 1024, 512);
+
+      // Secondary soft violet dust plume
+      const neb2 = ctx.createRadialGradient(720, 280, 10, 720, 280, 260);
+      neb2.addColorStop(0, 'rgba(129, 140, 248, 0.28)');
+      neb2.addColorStop(0.5, 'rgba(67, 56, 202, 0.14)');
+      neb2.addColorStop(1, 'rgba(2, 6, 23, 0)');
+      ctx.fillStyle = neb2;
+      ctx.fillRect(0, 0, 1024, 512);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      const skyGeo = new THREE.SphereGeometry(3000, 32, 24);
+      const skyMat = new THREE.MeshBasicMaterial({
+        map: tex,
+        side: THREE.BackSide,
+        depthWrite: false
+      });
+      return new THREE.Mesh(skyGeo, skyMat);
+    }
+    const skyDome = createRealisticNebulaSky();
+    scene.add(skyDome);
+
+    // Realistic Starfield
+    const starGeo = new THREE.BufferGeometry();
+    const starCount = 3000;
+    const starPos = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const d = 1200 + Math.random() * 1600;
+      const th = Math.random() * Math.PI * 2;
+      const ph = Math.acos(Math.random() * 2 - 1);
+      starPos[i*3] = d * Math.sin(ph) * Math.cos(th);
+      starPos[i*3+1] = d * Math.sin(ph) * Math.sin(th);
+      starPos[i*3+2] = d * Math.cos(ph);
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    const starfield = new THREE.Points(starGeo, new THREE.PointsMaterial({ size: 2.2, color: 0xffffff, transparent: true, opacity: 0.9 }));
+    scene.add(starfield);
+
+    // Procedural Texture Generator
+    function generatePlanetTexture(formId) {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 256;
+      const ctx = c.getContext('2d');
+
+      if (formId === 'planet_terrestrial' || formId === 'mini_planet_rocky') {
+        // Deep oceans
+        ctx.fillStyle = '#0f3854';
+        ctx.fillRect(0, 0, 512, 256);
+        // Shallow coasts
+        ctx.fillStyle = '#16697a';
+        for (let i = 0; i < 40; i++) {
+          ctx.beginPath();
+          ctx.arc(Math.random() * 512, Math.random() * 256, 25 + Math.random() * 50, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Continents
+        ctx.fillStyle = '#2b7a4b';
+        for (let i = 0; i < 25; i++) {
+          ctx.beginPath();
+          ctx.arc(Math.random() * 512, Math.random() * 256, 18 + Math.random() * 35, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Deserts & Mountains
+        ctx.fillStyle = '#8c7853';
+        for (let i = 0; i < 15; i++) {
+          ctx.beginPath();
+          ctx.arc(Math.random() * 512, Math.random() * 256, 10 + Math.random() * 20, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // Ice caps
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillRect(0, 0, 512, 25);
+        ctx.fillRect(0, 231, 512, 25);
+      } else {
+        // Monochromatic / Planetary gradient
+        const col = EVOLUTION_FORMS[formId]?.color || '#888888';
+        ctx.fillStyle = col;
+        ctx.fillRect(0, 0, 512, 256);
+        // Noise bands
+        for (let y = 0; y < 256; y += 4) {
+          ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.12)';
+          ctx.fillRect(0, y, 512, 4);
+        }
+      }
+      return new THREE.CanvasTexture(c);
+    }
+
+    // Player Celestial Body Setup
+    let playerGroup = new THREE.Group();
+    scene.add(playerGroup);
+
+    let moonMeshes = [];
+    let cloudMesh = null;
+
+    function buildPlayerMesh(formId) {
+      while (playerGroup.children.length > 0) playerGroup.remove(playerGroup.children[0]);
+      moonMeshes = [];
+
+      const def = EVOLUTION_FORMS[formId];
+      const r = Math.max(1.8, Math.pow(mass / (def.massReq || 1), 0.33) * 2.5);
+
+      const isRockyAsteroid = formId.includes('asteroid') || formId === 'meteorite';
+      const isBlackHole = formId === 'black_hole';
+
+      let geo;
+      if (isRockyAsteroid) {
+        // Vertex-deformed rocky asteroid
+        geo = new THREE.DodecahedronGeometry(r, 2);
+        const pos = geo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          const vx = pos.getX(i);
+          const vy = pos.getY(i);
+          const vz = pos.getZ(i);
+          const len = Math.hypot(vx, vy, vz);
+          const noise = 1 + (Math.sin(vx * 3) * Math.cos(vy * 3) * 0.22);
+          pos.setXYZ(i, (vx / len) * r * noise, (vy / len) * r * noise, (vz / len) * r * noise);
+        }
+        geo.computeVertexNormals();
+      } else {
+        geo = new THREE.SphereGeometry(r, 48, 48);
+      }
+
+      const tex = generatePlanetTexture(formId);
+      const mat = new THREE.MeshStandardMaterial({
+        map: tex,
+        roughness: isRockyAsteroid ? 0.85 : 0.45,
+        metalness: formId.includes('metal') ? 0.8 : 0.1,
+        color: isBlackHole ? 0x000000 : 0xffffff,
+      });
+
+      const body = new THREE.Mesh(geo, mat);
+      playerGroup.add(body);
+
+      // Realistic Translucent Clouds for planets
+      if (formId === 'planet_terrestrial' || formId === 'planet_super_earth') {
+        const cloudGeo = new THREE.SphereGeometry(r * 1.025, 36, 36);
+        const cloudMat = new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.4,
+          roughness: 0.9,
+          blending: THREE.AdditiveBlending
+        });
+        cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+        playerGroup.add(cloudMesh);
+      } else {
+        cloudMesh = null;
+      }
+
+      // Realistic Atmosphere Glow Shell (matching blue rim in screenshot)
+      if (formId.includes('planet')) {
+        const atmoGeo = new THREE.SphereGeometry(r * 1.15, 32, 32);
+        const atmoMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.18,
+          side: THREE.BackSide,
+          blending: THREE.AdditiveBlending
+        });
+        playerGroup.add(new THREE.Mesh(atmoGeo, atmoMat));
+      }
+
+      // Black Hole Accretion Disk
+      if (isBlackHole) {
+        const ringGeo = new THREE.RingGeometry(r * 1.5, r * 4.2, 48);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: 0xf97316,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.85
+        });
+        const disk = new THREE.Mesh(ringGeo, ringMat);
+        disk.rotation.x = Math.PI / 2.3;
+        playerGroup.add(disk);
+      }
+
+      // Orbiting Moons (matching screenshot's rocky lunar companion)
+      if (mass >= 500) {
+        const moonCount = mass >= 1500 ? 2 : 1;
+        for (let i = 0; i < moonCount; i++) {
+          const mGeo = new THREE.SphereGeometry(r * 0.22, 16, 16);
+          const mMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.85 });
+          const mMesh = new THREE.Mesh(mGeo, mMat);
+          scene.add(mMesh);
+          moonMeshes.push({ mesh: mMesh, dist: r * (2.8 + i * 1.6), speed: 0.8 / (i + 1), angle: Math.random() * Math.PI * 2 });
+        }
+      }
+    }
+
+    // Realistic Floating Asteroids & Debris Field
+    const matterEntities = [];
+    const matterColors = { rock: 0x8a7f72, metal: 0x93c5fd, ice: 0xbae6fd, gas: 0xf472b6, plasma: 0xfbbf24 };
+    const mTypes = ['rock', 'rock', 'metal', 'ice', 'gas', 'plasma'];
+
+    // Deformed rocky asteroid geometry for floating resource rocks
+    function createAsteroidRockGeometry(rad) {
+      const geo = new THREE.DodecahedronGeometry(rad, 1);
+      const pos = geo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const vx = pos.getX(i);
+        const vy = pos.getY(i);
+        const vz = pos.getZ(i);
+        const d = Math.hypot(vx, vy, vz);
+        const n = 1 + (Math.sin(vx * 4) * 0.25);
+        pos.setXYZ(i, (vx / d) * rad * n, (vy / d) * rad * n, (vz / d) * rad * n);
+      }
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    for (let i = 0; i < 350; i++) {
+      const type = mTypes[Math.floor(Math.random() * mTypes.length)];
+      const rad = 0.8 + Math.random() * 1.6;
+      const mesh = new THREE.Mesh(
+        createAsteroidRockGeometry(rad),
+        new THREE.MeshStandardMaterial({
+          color: matterColors[type],
+          roughness: 0.85,
+          metalness: type === 'metal' ? 0.8 : 0.05
+        })
+      );
+      const dist = 40 + Math.random() * 1600;
+      const ang = Math.random() * Math.PI * 2;
+      mesh.position.set(Math.cos(ang) * dist, (Math.random() - 0.5) * 80, Math.sin(ang) * dist);
+      scene.add(mesh);
+      matterEntities.push({
+        mesh,
+        type,
+        rad,
+        vel: new THREE.Vector3(-Math.sin(ang) * (1.5 + Math.random()), (Math.random() - 0.5) * 0.4, Math.cos(ang) * (1.5 + Math.random()))
+      });
+    }
+
+    // Direct Finger Touching Controls (no dash)
+    let touchActive = false;
+    let touchOriginX = 0, touchOriginY = 0;
+    let touchScreenX = 0, touchScreenY = 0;
+    let camYaw = 0, camPitch = 0.35;
+    let camDist = 38;
+    const playerPos = new THREE.Vector3();
+    const playerVel = new THREE.Vector3();
+
+    function onPointerDown(e) {
+      if (e.target.closest('.interactive') || e.target.tagName === 'BUTTON') return;
+      touchActive = true;
+      touchOriginX = e.clientX;
+      touchOriginY = e.clientY;
+      touchScreenX = e.clientX;
+      touchScreenY = e.clientY;
+      touchIndicator.style.display = 'block';
+      touchIndicator.style.left = e.clientX + 'px';
+      touchIndicator.style.top = e.clientY + 'px';
+    }
+
+    function onPointerMove(e) {
+      if (touchActive) {
+        touchScreenX = e.clientX;
+        touchScreenY = e.clientY;
+        touchIndicator.style.left = e.clientX + 'px';
+        touchIndicator.style.top = e.clientY + 'px';
+
+        const ddx = e.clientX - touchOriginX;
+        const ddy = e.clientY - touchOriginY;
+        const dist = Math.hypot(ddx, ddy);
+        if (dist > 95) {
+          const shift = (dist - 95) / dist;
+          touchOriginX += ddx * shift * 0.25;
+          touchOriginY += ddy * shift * 0.25;
+        }
+      }
+    }
+
+    function onPointerUp() {
+      touchActive = false;
+      touchIndicator.style.display = 'none';
+    }
+
+    window.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+
+    const keys = {};
+    window.addEventListener('keydown', e => {
+      const k = e.key.toLowerCase();
+      keys[k] = true;
+      if (e.code) keys[e.code.toLowerCase()] = true;
+
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code) || [' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
+        e.preventDefault();
+      }
+      if (e.code === 'Space' || k === 'q') triggerAbility();
+      if (k === 'e') openModal('evolve-modal');
+      if (e.key === 'Escape') openModal('settings-modal');
+    });
+    window.addEventListener('keyup', e => {
+      const k = e.key.toLowerCase();
+      keys[k] = false;
+      if (e.code) keys[e.code.toLowerCase()] = false;
+    });
+    window.addEventListener('blur', () => {
+      Object.keys(keys).forEach(k => keys[k] = false);
+    });
+
+    container.addEventListener('wheel', e => {
+      camDist = Math.max(12, Math.min(300, camDist + e.deltaY * 0.05));
+    }, { passive: true });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Special Capture / Magnet Ability
+    let abilityCooldown = 0;
+    function triggerAbility() {
+      if (abilityCooldown > 0) return;
+      abilityCooldown = 4;
+      playBeep(480, 'triangle', 0.25);
+
+      const toast = document.getElementById('event-toast');
+      toast.style.display = 'block';
+      toast.innerText = 'Stardust Accretion Pulse Activated!';
+      setTimeout(() => { toast.style.display = 'none'; }, 2200);
+
+      // Strong magnet pulse drawing rocks towards player
+      matterEntities.forEach(m => {
+        const dist = m.mesh.position.distanceTo(playerPos);
+        if (dist < 380) {
+          const pull = new THREE.Vector3().subVectors(playerPos, m.mesh.position).normalize();
+          m.vel.addScaledVector(pull, 42);
+        }
+      });
+    }
+
+    function startGame() {
+      initAudio();
+      document.getElementById('title-screen').style.display = 'none';
+      document.getElementById('game-hud').style.display = 'flex';
+      buildPlayerMesh(currentFormId);
+    }
+
+    function openModal(id) {
+      document.getElementById(id).style.display = 'flex';
+      if (id === 'evolve-modal') updateEvolveModal();
+      if (id === 'tree-modal') updateTreeModal();
+      if (id === 'codex-modal') updateCodexModal();
+    }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+    function updateEvolveModal() {
+      const def = EVOLUTION_FORMS[currentFormId];
+      const c = document.getElementById('evolve-choices');
+      c.innerHTML = '';
+      def.choices.forEach(chId => {
+        const target = EVOLUTION_FORMS[chId];
+        const can = mass >= target.massReq;
+        const div = document.createElement('div');
+        div.className = 'planet-card';
+        div.style.flexDirection = 'column';
+        div.style.alignItems = 'stretch';
+        div.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <div style="width: 28px; height: 28px; border-radius: 50%; background: ${target.color}; border: 1px solid #fff;"></div>
+            <div style="font-weight: 800; color: ${target.color}; font-size: 14px;">${target.name}</div>
+          </div>
+          <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">${target.desc}</div>
+          <div style="font-size: 11px; font-family: monospace; color: #fbbf24; margin-bottom: 10px;">Req: ${target.massReq} Mass</div>
+          <button class="btn ${can ? 'btn-primary' : ''}" style="width: 100%;" ${can ? '' : 'disabled'} onclick="evolveTo('${chId}')">
+            ${can ? 'EVOLVE' : 'LOCKED'}
+          </button>
+        `;
+        c.appendChild(div);
+      });
+    }
+
+    function updateTreeModal() {
+      const c = document.getElementById('tree-content');
+      c.innerHTML = `
+        <b>Stage 1: Meteorite</b><br>
+        Primordial Chondrite Meteorite<br><br>
+        <b>Stage 2: Asteroids (5 Types)</b><br>
+        Silicate Asteroid · Nickel-Iron Asteroid · Volatile Comet · Carbonaceous Chondrite · Prismatic Gem<br><br>
+        <b>Stage 3: Mini Planets (5 Types)</b><br>
+        Lithic Mini Planet · Hydrous Mini Planet · Igneous Mini Planet · Arid Dune World · Crystalline Dwarf<br><br>
+        <b>Stage 4: Full Planets (7 Types)</b><br>
+        Habitable Rocky Planet (Earth-like) · Super-Earth · Molten Magma World · Oceanic Megaworld · Diamond Carbon World · Jovian Gas Giant · Neptunian Ice Giant<br><br>
+        <b>Stage 5: Stars (5 Types)</b><br>
+        Red Dwarf Star · Sun-like Star · Blue Hypergiant · Degenerate White Dwarf · Wolf-Rayet Behemoth<br><br>
+        <b>Stage 6: Transformations</b><br>
+        Supernova Shockwave · Pulsar Neutron Star<br><br>
+        <b>Stage 7: Endgame & Anomalies (7 Paths)</b><br>
+        Singularity Black Hole · Time-Reversed White Hole · Hyper-Luminous Quasar · Kardashev Dyson Sphere · Protogalaxy Spiral Core · Spacetime Void · Higher-Dimensional Anomaly
+      `;
+    }
+
+    function updateCodexModal() {
+      const c = document.getElementById('codex-content');
+      c.innerHTML = '';
+      Object.values(EVOLUTION_FORMS).forEach(f => {
+        const isDiscovered = discovered.includes(f.id);
+        const d = document.createElement('div');
+        d.className = 'planet-card';
+        d.innerHTML = `
+          <div>
+            <b>${isDiscovered ? f.name : '??? Unknown Celestial Form'}</b> (Stage ${f.stage} · ${f.tier})<br>
+            <span style="font-size: 11px; color: #94a3b8;">${isDiscovered ? f.desc : 'Drift near asteroids and gather mass to unlock.'}</span>
+          </div>
+        `;
+        c.appendChild(d);
+      });
+    }
+
+    function evolveTo(formId) {
+      currentFormId = formId;
+      if (!discovered.includes(formId)) discovered.push(formId);
+      buildPlayerMesh(formId);
+      closeModal('evolve-modal');
+      playBeep(880, 'sine', 0.5);
+
+      const toast = document.getElementById('event-toast');
+      toast.style.display = 'block';
+      toast.innerText = `Evolved to ${EVOLUTION_FORMS[formId].name}!`;
+      setTimeout(() => { toast.style.display = 'none'; }, 2600);
+    }
+
+    function resetCosmicJourney() {
+      currentFormId = 'meteorite';
+      mass = 30;
+      inventory = { rock: 12, metal: 4, ice: 4, gas: 0, plasma: 0 };
+      discovered = ['meteorite'];
+      playerPos.set(0, 0, 0);
+      playerVel.set(0, 0, 0);
+      camYaw = 0;
+      camPitch = 0.35;
+      camDist = 38;
+      buildPlayerMesh('meteorite');
+      closeModal('settings-modal');
+      playBeep(440, 'triangle', 0.3);
+
+      const toast = document.getElementById('event-toast');
+      toast.style.display = 'block';
+      toast.innerText = 'Cosmic journey reset to Primordial Meteorite!';
+      setTimeout(() => { toast.style.display = 'none'; }, 2800);
+    }
+
+    // Animation Loop
+    let lastTime = performance.now();
+    function animate() {
+      requestAnimationFrame(animate);
+      const now = performance.now();
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+
+      if (abilityCooldown > 0) abilityCooldown = Math.max(0, abilityCooldown - dt);
+
+      // Finger Touching Movement (steers planet smoothly toward touch point)
+      const move = new THREE.Vector3();
+
+      if (touchActive) {
+        const dx = touchScreenX - touchOriginX;
+        const dy = touchScreenY - touchOriginY;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > 6) {
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          const fwd = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
+          const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
+
+          // Dragging finger up moves forward, right moves right
+          move.addScaledVector(fwd, -ny);
+          move.addScaledVector(right, nx);
+
+          const factor = Math.min(2.5, Math.max(0.4, Math.pow(dist / 40, 0.95)));
+          move.multiplyScalar(factor);
+
+          // Camera smoothly follows heading
+          const targetYaw = Math.atan2(-move.x, -move.z);
+          const diff = Math.atan2(Math.sin(targetYaw - camYaw), Math.cos(targetYaw - camYaw));
+          camYaw += diff * dt * 1.8;
+        }
+      }
+
+      // Keyboard WASD/Arrow support
+      const isUp = Boolean(keys['w'] || keys['keyw'] || keys['arrowup']);
+      const isDown = Boolean(keys['s'] || keys['keys'] || keys['arrowdown']);
+      const isLeft = Boolean(keys['a'] || keys['keya'] || keys['arrowleft']);
+      const isRight = Boolean(keys['d'] || keys['keyd'] || keys['arrowright']);
+
+      if (isUp) move.z -= 1;
+      if (isDown) move.z += 1;
+      if (isLeft) move.x -= 1;
+      if (isRight) move.x += 1;
+
+      if (move.lengthSq() > 0) {
+        if (!touchActive) {
+          move.normalize();
+          const fwd = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
+          const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
+          const worldDir = new THREE.Vector3();
+          worldDir.addScaledVector(fwd, -move.z);
+          worldDir.addScaledVector(right, move.x);
+          move.copy(worldDir);
+
+          if (isLeft && !isRight) camYaw += dt * 0.9;
+          else if (isRight && !isLeft) camYaw -= dt * 0.9;
+        }
+        playerVel.addScaledVector(move, 54 * dt);
+      }
+
+      playerVel.multiplyScalar(0.92);
+      playerPos.addScaledVector(playerVel, dt);
+      playerGroup.position.copy(playerPos);
+      playerGroup.rotation.y += 0.3 * dt;
+
+      if (cloudMesh) cloudMesh.rotation.y += 0.15 * dt;
+
+      // Orbiting Moons
+      moonMeshes.forEach(m => {
+        m.angle += m.speed * dt;
+        m.mesh.position.set(
+          playerPos.x + Math.cos(m.angle) * m.dist,
+          playerPos.y + Math.sin(m.angle * 0.7) * (m.dist * 0.25),
+          playerPos.z + Math.sin(m.angle) * m.dist
+        );
+      });
+
+      // Smooth Camera Follower with dynamic velocity anticipation
+      const lead = new THREE.Vector3(playerVel.x * 0.4, 0, playerVel.z * 0.4);
+      const lookTarget = new THREE.Vector3().addVectors(playerPos, lead);
+      const targetCamPos = new THREE.Vector3(
+        lookTarget.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist,
+        lookTarget.y + Math.sin(camPitch) * camDist,
+        lookTarget.z + Math.cos(camYaw) * Math.cos(camPitch) * camDist
+      );
+      camera.position.lerp(targetCamPos, 1.0 - Math.exp(-8.0 * dt));
+      camera.lookAt(lookTarget);
+      skyDome.position.copy(camera.position);
+      starfield.position.copy(camera.position);
+
+      // Matter Collection: Move the planet near the rocks to draw and harvest them!
+      const currentRadius = Math.max(1.8, Math.pow(mass / 100, 0.33) * 2.5);
+      const gravityRadius = currentRadius * 5.5;
+
+      matterEntities.forEach(m => {
+        m.mesh.position.addScaledVector(m.vel, dt);
+        m.mesh.rotation.x += 0.8 * dt;
+        m.mesh.rotation.y += 0.5 * dt;
+
+        const dist = m.mesh.position.distanceTo(playerPos);
+
+        // Gravitational attraction when moving near rocks
+        if (dist < gravityRadius) {
+          const pull = new THREE.Vector3().subVectors(playerPos, m.mesh.position).normalize();
+          const strength = (1 - dist / gravityRadius) * 45;
+          m.vel.addScaledVector(pull, strength * dt);
+        }
+
+        // Accretion / Absorption on surface collision
+        if (dist < currentRadius + m.rad) {
+          mass += 6;
+          inventory[m.type] = (inventory[m.type] || 0) + 1;
+          playBeep(520, 'sine', 0.08);
+
+          // Reset harvested asteroid far away
+          const ang = Math.random() * Math.PI * 2;
+          m.mesh.position.set(
+            playerPos.x + Math.cos(ang) * 450,
+            playerPos.y + (Math.random() - 0.5) * 60,
+            playerPos.z + Math.sin(ang) * 450
+          );
+          m.vel.set(-Math.sin(ang) * 2, 0, Math.cos(ang) * 2);
+        }
+      });
+
+      // Update Minimalist HUD (matching screenshot)
+      const def = EVOLUTION_FORMS[currentFormId];
+      document.getElementById('hud-name').innerText = def.name;
+      document.getElementById('hud-mass').innerText = Math.floor(mass);
+      document.getElementById('hud-avatar').style.background = `radial-gradient(circle at 35% 35%, #fff 0%, ${def.color} 50%, #031428 100%)`;
+      document.getElementById('hud-avatar').innerText = `LV${def.stage}`;
+
+      const nextTargetMass = def.choices.length > 0 ? (EVOLUTION_FORMS[def.choices[0]]?.massReq || mass * 1.5) : (mass * 1.5);
+      const pct = Math.min(100, Math.max(6, (mass / nextTargetMass) * 100));
+      document.getElementById('hud-bar').style.width = pct + '%';
+
+      // Check if ready to evolve and pulse the button
+      const canEvolveAny = def.choices.some(ch => mass >= EVOLUTION_FORMS[ch].massReq);
+      const evolveBtn = document.getElementById('btn-evolve');
+      if (canEvolveAny) {
+        evolveBtn.classList.add('highlight');
+      } else {
+        evolveBtn.classList.remove('highlight');
+      }
+
+      document.getElementById('res-rock').innerText = inventory.rock;
+      document.getElementById('res-metal').innerText = inventory.metal;
+      document.getElementById('res-ice').innerText = inventory.ice;
+      document.getElementById('res-gas').innerText = inventory.gas;
+      document.getElementById('res-plasma').innerText = inventory.plasma;
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>

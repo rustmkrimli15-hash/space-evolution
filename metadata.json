@@ -1,0 +1,6 @@
+{
+  "name": "Cosmic Evolution 3D",
+  "description": "A 3D cosmic sandbox evolution game where you evolve from a tiny meteorite to asteroids, planets, stars, black holes, white holes, and mysterious cosmic anomalies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
